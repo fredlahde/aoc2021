@@ -158,14 +158,14 @@ pub fn solve(contents: &str) -> u64 {
     let mut boards_won: [bool; 100] = [false; 100];
     for num in input_numbers {
         for (ii, board) in &mut boards.iter_mut().enumerate() {
+            if boards_won[ii] {
+                continue;
+            }
             board.hit_for_number(num);
             if board.has_full_row() {
                 let numbers_not_hit: u64 = board.get_numbers_not_hit_sum();
-                let score = numbers_not_hit * num;
-                if score > 0 && !boards_won[ii] {
-                    last_score = numbers_not_hit * num;
-                    boards_won[ii] = true
-                }
+                last_score = numbers_not_hit * num;
+                boards_won[ii] = true
             }
         }
     }
