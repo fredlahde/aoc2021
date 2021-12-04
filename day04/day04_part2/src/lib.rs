@@ -104,7 +104,7 @@ impl From<[&str; 5]> for BingoBoard {
         // Add rows
         for (i, ss) in strings.iter().enumerate() {
             let mut row = [0_u64; 5];
-            for (ii, s) in ss.split(' ').filter(|s| !s.is_empty()).enumerate() {
+            for (ii, s) in ss.split_whitespace().enumerate() {
                 row[ii] = s.parse().unwrap();
             }
             board.rows[i] = row.into();
@@ -114,8 +114,7 @@ impl From<[&str; 5]> for BingoBoard {
             let mut row = [0_u64; 5];
             for (ii, ss) in strings.iter().enumerate() {
                 let num = ss
-                    .split(' ')
-                    .filter(|s| !s.is_empty())
+                    .split_whitespace()
                     .map(|s| s.parse().unwrap())
                     .nth(x)
                     .unwrap();
