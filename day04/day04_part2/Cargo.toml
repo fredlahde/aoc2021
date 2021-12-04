@@ -7,3 +7,10 @@ edition = "2021"
 
 [dependencies]
 uuid = { version = "*", features = ["v4"] }
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "bingo_benchmark"
+harness = false
