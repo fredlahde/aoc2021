@@ -142,14 +142,12 @@ pub fn solve(contents: &str) -> u64 {
     let mut boards = Vec::with_capacity(100);
     let mut curr_board = [""; 5];
     let mut count = 0;
-    let mut board_count = 0;
     for line in split {
         if line == "" {
             let board: BingoBoard = curr_board.into();
             boards.push(board);
             curr_board = [""; 5];
             count = 0;
-            board_count += 1;
         } else {
             curr_board[count] = line;
             count += 1;
