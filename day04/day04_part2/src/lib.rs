@@ -103,19 +103,19 @@ impl From<[&str; 5]> for BingoBoard {
         let mut board = Self::new();
         // Add rows
         for (i, ss) in strings.iter().enumerate() {
-            let mut row = [0u64; 5];
-            for (ii, s) in ss.split(' ').filter(|s| *s != "").enumerate() {
+            let mut row = [0_u64; 5];
+            for (ii, s) in ss.split(' ').filter(|s| !s.is_empty()).enumerate() {
                 row[ii] = s.parse().unwrap();
             }
             board.rows[i] = row.into();
         }
         // Add columns
         for x in 0..5 {
-            let mut row = [0u64; 5];
+            let mut row = [0_u64; 5];
             for (ii, ss) in strings.iter().enumerate() {
                 let num = ss
                     .split(' ')
-                    .filter(|s| *s != "")
+                    .filter(|s| !s.is_empty())
                     .map(|s| s.parse().unwrap())
                     .nth(x)
                     .unwrap();
@@ -127,12 +127,10 @@ impl From<[&str; 5]> for BingoBoard {
     }
 }
 
-impl BingoBoard {}
-
 pub fn solve(contents: &str) -> u64 {
     let mut split = contents.split('\n');
     let number_str = split.next().unwrap();
-    let mut input_numbers = [0u64; 100];
+    let mut input_numbers = [0_u64; 100];
     for (ii, ss) in number_str.split(',').enumerate() {
         input_numbers[ii] = ss.parse().unwrap()
     }
@@ -143,7 +141,7 @@ pub fn solve(contents: &str) -> u64 {
     let mut curr_board = [""; 5];
     let mut count = 0;
     for line in split {
-        if line == "" {
+        if line.is_empty() {
             let board: BingoBoard = curr_board.into();
             boards.push(board);
             curr_board = [""; 5];
@@ -170,7 +168,7 @@ pub fn solve(contents: &str) -> u64 {
         }
     }
 
-    return last_score;
+    last_score
 }
 
 #[cfg(test)]
