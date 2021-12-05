@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 fn solve_for_b(p1: (i32, i32), slope: i32) -> i32 {
     p1.1 - (slope * p1.0)
@@ -52,11 +52,11 @@ fn is_point_on_line_with_defined_slope(p: (i32, i32), m: i32, b: i32) -> bool {
     p.1 == (m * p.0) + b
 }
 
-fn get_points_on_line_between_points(p1: (i32, i32), p2: (i32, i32)) -> Vec<(i32, i32)> {
+fn get_points_on_line_between_points(p1: (i32, i32), p2: (i32, i32)) -> HashSet<(i32, i32)> {
     let slope = get_slope(p1, p2);
-    let mut points = Vec::new();
-    points.push(p1);
-    points.push(p2);
+    let mut points: HashSet<(i32, i32)> = HashSet::with_capacity(500);
+    points.insert(p1);
+    points.insert(p2);
     match slope {
         Slope::Undefined => {
             let min = p1.1.min(p2.1);
@@ -64,7 +64,7 @@ fn get_points_on_line_between_points(p1: (i32, i32), p2: (i32, i32)) -> Vec<(i32
             for yy in min..=max {
                 let x = (p1.0, yy);
                 if !points.contains(&x) {
-                    points.push((p1.0, yy));
+                    points.insert((p1.0, yy));
                 }
             }
         }
@@ -78,8 +78,8 @@ fn get_points_on_line_between_points(p1: (i32, i32), p2: (i32, i32)) -> Vec<(i32
             for xx in min_xx..=max_xx {
                 for yy in min_yy..=max_yy {
                     let is_on_slope = is_point_on_line_with_defined_slope((xx, yy), slope, b);
-                    if is_on_slope && !points.contains(&(xx, yy)) {
-                        points.push((xx, yy));
+                    if is_on_slope {
+                        points.insert((xx, yy));
                     }
                 }
             }
