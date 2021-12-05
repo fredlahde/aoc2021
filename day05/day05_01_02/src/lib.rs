@@ -117,6 +117,21 @@ mod test {
     use super::*;
 
     #[test]
+    fn test_solution() {
+        use std::io::Read;
+        let mut fd = std::fs::File::open("input").unwrap();
+        let mut contens = String::new();
+        fd.read_to_string(&mut contens).unwrap();
+        let mut point_pairs = parse::<500>(&contens);
+        let part2 = get_count_of_points_with_at_least_2_overlaps(point_pairs);
+        assert_eq!(21373, part2);
+
+        filter_points_with_same_x_or_y(&mut point_pairs);
+        let part1 = get_count_of_points_with_at_least_2_overlaps(point_pairs);
+        assert_eq!(7380, part1);
+    }
+
+    #[test]
     fn test_is_point_on_line_defined_slope() {
         let m = 3;
         let b = 1;
