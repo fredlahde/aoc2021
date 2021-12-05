@@ -1,7 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
+/// solves `y - (m * x)`
 fn solve_for_b(p1: (i32, i32), slope: i32) -> i32 {
     p1.1 - (slope * p1.0)
+}
+
+/// checks if `y = (m * x) + b`
+fn is_point_on_line_with_defined_slope(p: (i32, i32), m: i32, b: i32) -> bool {
+    p.1 == (m * p.0) + b
 }
 
 #[derive(Debug)]
@@ -10,6 +16,8 @@ enum Slope {
     Undefined,
 }
 
+/// Tries to calculate `(y2 - y1) / (x2 -x1)`
+/// Can return `Slope::Undefined` in the event that `x2 == x1`
 fn get_slope(p1: (i32, i32), p2: (i32, i32)) -> Slope {
     if (p2.0 - p1.0) == 0 {
         return Slope::Undefined;
@@ -46,10 +54,6 @@ pub fn filter_points_with_same_x_or_y<const N: usize>(
             }
         }
     }
-}
-
-fn is_point_on_line_with_defined_slope(p: (i32, i32), m: i32, b: i32) -> bool {
-    p.1 == (m * p.0) + b
 }
 
 fn get_points_on_line_between_points(p1: (i32, i32), p2: (i32, i32)) -> HashSet<(i32, i32)> {
@@ -107,7 +111,6 @@ pub fn get_count_of_points_with_at_least_2_overlaps<const N: usize>(
 
     mem.iter().filter(|(_, count)| *count >= &2).count()
 }
-
 
 #[cfg(test)]
 mod test {
