@@ -2,7 +2,7 @@ fn fuel_cost(xx: i32) -> i32 {
     return ((xx * xx) / 2) + (xx / 2);
 }
 
-pub fn solve<const N: usize>(numbers: [i32; N]) -> u32 {
+pub fn solve(numbers: &[i32]) -> u32 {
     let mut dist_low = u32::MAX;
     for xx in 0..=500 {
         let mut dist_now = 0_u32;

@@ -15,7 +15,7 @@ fn main() {
         numbers[ii] = s.parse().unwrap();
     }
 
-    let dist_low = solve(numbers);
+    let dist_low = solve(&numbers);
 
     println!("{}", dist_low);
 }

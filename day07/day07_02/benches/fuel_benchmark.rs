@@ -16,7 +16,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         let s = split.next().unwrap();
         numbers[ii] = s.parse().unwrap();
     }
-    c.bench_function("fuel", |b| b.iter(|| solve(black_box(numbers))));
+    let numbers: Vec<i32> = numbers.to_vec();
+    c.bench_function("fuel", |b| b.iter(|| solve(black_box(&numbers))));
 }
 
 criterion_group!(benches, criterion_benchmark);
