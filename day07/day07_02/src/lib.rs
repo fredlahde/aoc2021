@@ -10,9 +10,6 @@ pub fn solve(numbers: &[i32]) -> u32 {
             let dist = (xx - yy).abs();
             let dist = fuel_cost(dist);
             dist_now += dist as u32;
-            if dist_now > dist_low {
-                break;
-            }
         }
         if dist_low > dist_now {
             dist_low = dist_now;
