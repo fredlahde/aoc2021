@@ -38,29 +38,14 @@ fn get_basins_from_point<const HEIGHT: usize, const WIDTH: usize>(
         below,
     } = get_adjacent_points(map, start);
 
-    if let Some((left, next_pos)) = left {
-        if left != 9 && !found.contains(&next_pos) {
-            get_basins_from_point(map, next_pos, found);
+    let func = |x| {
+        if let Some((val, next_pos)) = x {
+            if val != 9 && !found.contains(&next_pos) {
+                get_basins_from_point(map, next_pos, found);
+            }
         }
-    }
-
-    if let Some((right, next_pos)) = right {
-        if right != 9 && !found.contains(&next_pos) {
-            get_basins_from_point(map, next_pos, found);
-        }
-    }
-
-    if let Some((above, next_pos)) = above {
-        if above != 9 && !found.contains(&next_pos) {
-            get_basins_from_point(map, next_pos, found);
-        }
-    }
-
-    if let Some((below, next_pos)) = below {
-        if below != 9 && !found.contains(&next_pos) {
-            get_basins_from_point(map, next_pos, found);
-        }
-    }
+    };
+    [left, right, above, below].into_iter().for_each(func);
 }
 
 struct AdjacentPoints {
@@ -118,8 +103,8 @@ fn count_three_largest_basins<const HEIGHT: usize, const WIDTH: usize>(
         })
         .map(|basins| basins.len())
         .collect();
-    basins.sort_by(|a, b| b.partial_cmp(a).unwrap());
-    basins.into_iter().take(3).product()
+    basins.sort_unstable();
+    basins.into_iter().rev().take(3).product()
 }
 
 fn get_low_points<const HEIGHT: usize, const WIDTH: usize>(
@@ -136,26 +121,14 @@ fn get_low_points<const HEIGHT: usize, const WIDTH: usize>(
                 below,
             } = get_adjacent_points(map, (xx, yy));
             let mut is_smaller = true;
-            if let Some((left, _)) = left {
-                if num_at_pos >= left {
-                    is_smaller = false;
+            let check = |x| {
+                if let Some((val, _)) = x {
+                    if num_at_pos >= val {
+                        is_smaller = false;
+                    }
                 }
-            }
-            if let Some((right, _)) = right {
-                if num_at_pos >= right {
-                    is_smaller = false;
-                }
-            }
-            if let Some((above, _)) = above {
-                if num_at_pos >= above {
-                    is_smaller = false;
-                }
-            }
-            if let Some((below, _)) = below {
-                if num_at_pos >= below {
-                    is_smaller = false;
-                }
-            }
+            };
+            [left, right, above, below].into_iter().for_each(check);
             if is_smaller {
                 low_points.push((num_at_pos, (xx, yy)));
             }
