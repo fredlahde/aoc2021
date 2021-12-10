@@ -1,5 +1,5 @@
-use std::io::Read;
 use std::collections::VecDeque;
+use std::io::Read;
 fn main() {
     let mut fd = std::fs::File::open("input").unwrap();
     let mut contents = String::new();
@@ -61,23 +61,13 @@ fn parse(input: &str) -> Vec<Vec<Token>> {
     ret
 }
 
-fn get_error_score(x: &Token) -> u32 {
-    match x {
-        Token::CLOSING_PARAN() => 3,
-        Token::CLOSING_SQUARE_BRACKET() => 57,
-        Token::CLOSING_CURLY_BRACKET() => 1197,
-        Token::CLOSING_POINTY_BRACK() => 25137,
-        _ => panic!("got opening tag as invalid char")
-    }
-}
-
 fn get_completion_score(x: &Token) -> u128 {
     match x {
         Token::OPEN_PARAN() => 1,
         Token::OPEN_SQUARE_BRACKET() => 2,
         Token::OPEN_CURLY_BRACKET() => 3,
         Token::OPEN_POINTY_BRACK() => 4,
-        _ => panic!("got closing tag as invalid char")
+        _ => panic!("got closing tag as invalid char"),
     }
 }
 
@@ -99,7 +89,7 @@ fn part2(tokens: Vec<Vec<Token>>) -> u128 {
                     None => panic!("closng token right at the beginning"),
                     Some(lt) => lt,
                 };
-                let mut maybe_missmatching = [
+                let maybe_missmatching = [
                     VALID_PARAN_PAIR,
                     VALID_SQUARE_PAIR,
                     VALID_CURLY_PAIR,
@@ -113,23 +103,22 @@ fn part2(tokens: Vec<Vec<Token>>) -> u128 {
                         None
                     }
                 })
-                .filter(|it| it.is_some()).collect::<Vec<_>>();
-                if maybe_missmatching.len() == 1 {
-                    let x = maybe_missmatching[0].unwrap();
+                .filter(|it| it.is_some());
+                if maybe_missmatching.count() == 1 {
                     continue 'line_loop;
                 }
             }
         }
-        if stack.len() != 0 {
+        if !stack.is_empty() {
             let mut score = 0;
             while let Some(tt) = stack.pop_back() {
-                score = (score * 5) + get_completion_score(&tt); 
+                score = (score * 5) + get_completion_score(&tt);
             }
-                scores.push(score);
+            scores.push(score);
         }
     }
     scores.sort_unstable();
-    scores[scores.len()/2]
+    scores[scores.len() / 2]
 }
 
 #[cfg(test)]
