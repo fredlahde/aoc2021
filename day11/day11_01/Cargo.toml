@@ -1,0 +1,17 @@
+[package]
+name = "day11_01_02"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+termion = "*"
+
+[dev-dependencies]
+criterion = "*"
+
+
+[[bench]]
+name = "my_benchmark"
+harness = false
