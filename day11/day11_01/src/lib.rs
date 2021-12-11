@@ -13,14 +13,20 @@ pub fn parse<const HEIGHT: usize, const WIDTH: usize>(input: &str) -> [[u32; WID
 
 #[derive(Debug, Default)]
 struct AdjacentPoints {
-    left: Option<(u32, (usize, usize))>,
-    right: Option<(u32, (usize, usize))>,
-    above: Option<(u32, (usize, usize))>,
-    below: Option<(u32, (usize, usize))>,
-    top_left: Option<(u32, (usize, usize))>,
-    top_right: Option<(u32, (usize, usize))>,
-    bottom_left: Option<(u32, (usize, usize))>,
-    bottom_right: Option<(u32, (usize, usize))>,
+    pos: [Option<(u32, (usize, usize))>; 8],
+}
+
+impl AdjacentPoints {
+    fn for_each<F>(&self, mut f: F)
+    where
+        F: FnMut((u32, (usize, usize))),
+    {
+        self.pos.into_iter().for_each(|x| {
+            if let Some(y) = x {
+                f(y)
+            }
+        });
+    }
 }
 
 fn get_adjacent_points<const HEIGHT: usize, const WIDTH: usize>(
@@ -31,60 +37,38 @@ fn get_adjacent_points<const HEIGHT: usize, const WIDTH: usize>(
     let (xx, yy) = from;
 
     if xx > 0 {
-        ret.left = Some((map[yy][xx - 1], (xx - 1, yy)));
+        ret.pos[0] = Some((map[yy][xx - 1], (xx - 1, yy)));
     }
 
     if xx < WIDTH - 1 {
-        ret.right = Some((map[yy][xx + 1], (xx + 1, yy)));
+        ret.pos[1] = Some((map[yy][xx + 1], (xx + 1, yy)));
     }
 
     if yy > 0 {
-        ret.above = Some((map[yy - 1][xx], (xx, yy - 1)));
+        ret.pos[2] = Some((map[yy - 1][xx], (xx, yy - 1)));
     }
 
     if yy < HEIGHT - 1 {
-        ret.below = Some((map[yy + 1][xx], (xx, yy + 1)));
+        ret.pos[3] = Some((map[yy + 1][xx], (xx, yy + 1)));
     }
 
     if yy > 0 && xx > 0 {
-        ret.top_left = Some((map[yy - 1][xx - 1], (xx - 1, yy - 1)))
+        ret.pos[4] = Some((map[yy - 1][xx - 1], (xx - 1, yy - 1)))
     }
 
     if yy > 0 && xx < WIDTH - 1 {
-        ret.top_right = Some((map[yy - 1][xx + 1], (xx + 1, yy - 1)))
+        ret.pos[5] = Some((map[yy - 1][xx + 1], (xx + 1, yy - 1)))
     }
 
     if yy < HEIGHT - 1 && xx > 0 {
-        ret.bottom_left = Some((map[yy + 1][xx - 1], (xx - 1, yy + 1)));
+        ret.pos[6] = Some((map[yy + 1][xx - 1], (xx - 1, yy + 1)));
     }
 
     if yy < HEIGHT - 1 && xx < WIDTH - 1 {
-        ret.bottom_right = Some((map[yy + 1][xx + 1], (xx + 1, yy + 1)));
+        ret.pos[7] = Some((map[yy + 1][xx + 1], (xx + 1, yy + 1)));
     }
 
     ret
-}
-
-#[allow(unused)]
-fn print_matrix<const HEIGHT: usize, const WIDTH: usize>(matrix: &[[u32; WIDTH]; HEIGHT]) {
-    use termion::color;
-    for yy in 0..matrix.len() {
-        for xx in 0..matrix[0].len() {
-            let val = matrix[yy][xx];
-            if val < 10 {
-                print!("{:02}", val);
-            } else {
-                print!(
-                    "{}{}{}",
-                    color::Fg(color::Red),
-                    val,
-                    color::Fg(color::Reset)
-                );
-            }
-        }
-        println!();
-    }
-    println!();
 }
 
 pub fn part1<const HEIGHT: usize, const WIDTH: usize>(matrix: &mut [[u32; WIDTH]; HEIGHT]) -> u128 {
@@ -135,39 +119,13 @@ fn recurse_flashes_from_point<const HEIGHT: usize, const WIDTH: usize>(
 ) {
     found.insert(start);
 
-    print_matrix(map);
-    let AdjacentPoints {
-        left,
-        right,
-        above,
-        below,
-        top_left,
-        top_right,
-        bottom_left,
-        bottom_right,
-    } = get_adjacent_points(map, start);
-
-    let func = |x: Option<(u32, (usize, usize))>| {
-        if let Some((_, next_pos)) = x {
-            let y = map[next_pos.1][next_pos.0];
-            map[next_pos.1][next_pos.0] = y + 1;
-            if y + 1 > 9 && !found.contains(&next_pos) {
-                recurse_flashes_from_point(map, next_pos, found);
-            }
+    get_adjacent_points(map, start).for_each(|(_, next_pos)| {
+        let y = map[next_pos.1][next_pos.0];
+        map[next_pos.1][next_pos.0] = y + 1;
+        if y + 1 > 9 && !found.contains(&next_pos) {
+            recurse_flashes_from_point(map, next_pos, found);
         }
-    };
-    [
-        left,
-        right,
-        above,
-        below,
-        top_left,
-        top_right,
-        bottom_left,
-        bottom_right,
-    ]
-    .into_iter()
-    .for_each(func);
+    });
 }
 
 #[cfg(test)]
@@ -187,7 +145,6 @@ mod test {
 4846848554
 5283751526";
         let mut matrix = parse::<10, 10>(&input);
-        print_matrix(&matrix);
         let count = part1(&mut matrix);
         assert_eq!(1656, count);
     }
@@ -205,7 +162,6 @@ mod test {
 4846848554
 5283751526";
         let mut matrix = parse::<10, 10>(&input);
-        print_matrix(&matrix);
         let count = part2(&mut matrix);
         assert_eq!(195, count);
     }
