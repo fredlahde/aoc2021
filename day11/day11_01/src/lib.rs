@@ -13,59 +13,58 @@ pub fn parse<const HEIGHT: usize, const WIDTH: usize>(input: &str) -> [[u32; WID
 
 #[derive(Debug, Default)]
 struct AdjacentPoints {
-    pos: [Option<(u32, (usize, usize))>; 8],
+    pos: [Option<(usize, usize)>; 8],
 }
 
 impl AdjacentPoints {
     fn for_each<F>(&self, mut f: F)
     where
-        F: FnMut((u32, (usize, usize))),
+        F: FnMut((usize, usize)),
     {
         self.pos.into_iter().for_each(|x| {
-            if let Some(y) = x {
-                f(y)
+            if let Some(x) = x {
+                f(x)
             }
         });
     }
 }
 
 fn get_adjacent_points<const HEIGHT: usize, const WIDTH: usize>(
-    map: &[[u32; WIDTH]; HEIGHT],
     from: (usize, usize),
 ) -> AdjacentPoints {
     let mut ret = AdjacentPoints::default();
     let (xx, yy) = from;
 
     if xx > 0 {
-        ret.pos[0] = Some((map[yy][xx - 1], (xx - 1, yy)));
+        ret.pos[0] = Some((xx - 1, yy));
     }
 
     if xx < WIDTH - 1 {
-        ret.pos[1] = Some((map[yy][xx + 1], (xx + 1, yy)));
+        ret.pos[1] = Some((xx + 1, yy));
     }
 
     if yy > 0 {
-        ret.pos[2] = Some((map[yy - 1][xx], (xx, yy - 1)));
+        ret.pos[2] = Some((xx, yy - 1));
     }
 
     if yy < HEIGHT - 1 {
-        ret.pos[3] = Some((map[yy + 1][xx], (xx, yy + 1)));
+        ret.pos[3] = Some((xx, yy + 1));
     }
 
     if yy > 0 && xx > 0 {
-        ret.pos[4] = Some((map[yy - 1][xx - 1], (xx - 1, yy - 1)))
+        ret.pos[4] = Some((xx - 1, yy - 1))
     }
 
     if yy > 0 && xx < WIDTH - 1 {
-        ret.pos[5] = Some((map[yy - 1][xx + 1], (xx + 1, yy - 1)))
+        ret.pos[5] = Some((xx + 1, yy - 1))
     }
 
     if yy < HEIGHT - 1 && xx > 0 {
-        ret.pos[6] = Some((map[yy + 1][xx - 1], (xx - 1, yy + 1)));
+        ret.pos[6] = Some((xx - 1, yy + 1));
     }
 
     if yy < HEIGHT - 1 && xx < WIDTH - 1 {
-        ret.pos[7] = Some((map[yy + 1][xx + 1], (xx + 1, yy + 1)));
+        ret.pos[7] = Some((xx + 1, yy + 1));
     }
 
     ret
@@ -119,11 +118,11 @@ fn recurse_flashes_from_point<const HEIGHT: usize, const WIDTH: usize>(
 ) {
     found.insert(start);
 
-    get_adjacent_points(map, start).for_each(|(_, next_pos)| {
-        let y = map[next_pos.1][next_pos.0];
-        map[next_pos.1][next_pos.0] = y + 1;
-        if y + 1 > 9 && !found.contains(&next_pos) {
-            recurse_flashes_from_point(map, next_pos, found);
+    get_adjacent_points::<HEIGHT, WIDTH>(start).for_each(|(nx, ny)| {
+        let y = map[ny][nx];
+        map[ny][nx] = y + 1;
+        if y + 1 > 9 && !found.contains(&(nx, ny)) {
+            recurse_flashes_from_point(map, (nx, ny), found);
         }
     });
 }
