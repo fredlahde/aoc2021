@@ -1,0 +1,21 @@
+001 110 0 000000000011011 110 100 0 1010 010 100 1 0001 0 0100 0000000
+VVV TTT I LLLLLLLLLLLLLLL AAA AAA A AAAA BBB BBB B BBBB B BBBB
+
+001 - Version of first packet: 1
+110 - Type of frist packet: 6 -> operator
+  0 - Length Bit, 0 -> the next 15 bits are the length in bits of the sub-packets
+000000000011011 - Length of sub packets -> 27
+
+110 - Version of the first sub-packet, 6
+100 - Type of the first sub-packet, 4 -> literal packet
+0   - Continuation bit -> 0 -> this is the last 4 bit group of this literal
+1010 - value of the literal -> 10
+
+010 - version of the second sub packet -> 2
+100 - Type of the second sub-packet, 4 -> literal packet
+1   - continuation bit -> 1 -> this is not the last group of this literal
+0001 -> first 4 bits of the literal
+0   - Continuation bit -> 0 -> this is the last 4 bit group of this literal
+0100 -> last 4 bits of the literal (the literal is then 00010100, which is 20)
+
+0000000 -> ignore, just for the example, I guess
