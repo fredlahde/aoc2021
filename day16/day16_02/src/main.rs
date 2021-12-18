@@ -1,8 +1,9 @@
 use bitvec::prelude::Msb0;
 use bitvec::prelude::*;
 use bitvec::slice::BitSlice;
+use std::convert::Infallible;
+use std::num::TryFromIntError;
 use std::ops::{BitXor, Index, Range, Shl};
-use std::rc::Rc;
 
 fn main() {
     use std::io::Read;
@@ -10,9 +11,9 @@ fn main() {
     let mut contents = String::new();
     fd.read_to_string(&mut contents).unwrap();
     let contents = contents.replace('\n', "");
-    let bits = BitStream::from(contents.as_str());
+    let bits = BitStream::try_from(contents.as_str()).unwrap();
     let packet = parse_bit_stream(bits).unwrap();
-    let res = apply_ops(&Rc::new(packet));
+    let res = apply_ops(&packet);
     assert_eq!(831996589851, res);
     println!("{}", res);
 }
@@ -34,41 +35,78 @@ pub struct BitStream {
     idx: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ParsingError {
     OOB,
     Overflow,
+    InvalidHexDigit(char),
+    FromIntError(TryFromIntError),
+    ByteOverflow(Infallible),
+    EOF,
+    EmptyPacketStream,
+    InvalidInputLen,
 }
 
-impl From<&str> for BitStream {
-    fn from(s: &str) -> Self {
-        assert!(s.len() % 2 == 0);
+impl From<Infallible> for ParsingError {
+    fn from(e: Infallible) -> Self {
+        Self::ByteOverflow(e)
+    }
+}
+
+impl From<TryFromIntError> for ParsingError {
+    fn from(e: TryFromIntError) -> Self {
+        Self::FromIntError(e)
+    }
+}
+
+fn byte_from_hex_char(c: char) -> Result<u8, ParsingError> {
+    Ok(c.to_digit(16)
+        .ok_or(ParsingError::InvalidHexDigit(c))?
+        .try_into()?)
+}
+
+impl TryFrom<&str> for BitStream {
+    type Error = ParsingError;
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        if s.len() % 2 != 0 {
+            return Err(ParsingError::InvalidInputLen);
+        }
         let s_len = s.len();
         let mut chars = s.chars();
-        let backing: Vec<u8> = (0..(s_len / 2))
+        let backing: Vec<Result<u8, ParsingError>> = (0..(s_len / 2))
             .map(|_| {
-                let a: u8 = chars
+                let a = chars
                     .next()
-                    .unwrap()
-                    .to_digit(16)
-                    .unwrap()
-                    .try_into()
-                    .unwrap();
-                let b: u8 = chars
+                    .ok_or(ParsingError::EOF)
+                    .and_then(|c| byte_from_hex_char(c));
+                let b = chars
                     .next()
-                    .unwrap()
-                    .to_digit(16)
-                    .unwrap()
-                    .try_into()
-                    .unwrap();
-                a << 4 | b
+                    .ok_or(ParsingError::EOF)
+                    .and_then(|c| byte_from_hex_char(c));
+                if a.is_err() {
+                    return a;
+                }
+                if b.is_err() {
+                    return b;
+                }
+                Ok(a.unwrap() << 4 | b.unwrap())
             })
             .collect();
-        assert!(backing.len() == s.len() / 2);
-        Self {
+        if backing.len() != s.len() / 2 {
+            return Err(ParsingError::InvalidInputLen);
+        }
+
+        let maybe_err = backing.iter().find(|r| r.is_err());
+        if let Some(Err(e)) = maybe_err {
+            return Err(e.clone());
+        }
+
+        let backing: Vec<u8> = backing.into_iter().map(|r| r.unwrap()).collect();
+
+        Ok(Self {
             backing: backing.view_bits::<Msb0>().to_owned(),
             idx: 0,
-        }
+        })
     }
 }
 
@@ -117,7 +155,7 @@ pub struct Packet {
 #[derive(Debug, PartialEq)]
 pub enum Payload {
     Literal(u128),
-    Op(Operand, Vec<Rc<Packet>>),
+    Op(Operand, Vec<Packet>),
 }
 
 #[derive(Debug, PartialEq)]
@@ -157,7 +195,7 @@ impl Packet {
     fn new_op_packet(version: u8, op: Operand, childs: Vec<Packet>) -> Self {
         Self {
             version,
-            payload: Payload::Op(op, childs.into_iter().map(Rc::new).collect()),
+            payload: Payload::Op(op, childs),
         }
     }
 }
@@ -165,7 +203,7 @@ impl Packet {
 pub fn parse_bit_stream(mut stream: BitStream) -> Result<Packet, ParsingError> {
     let mut ret = Vec::new();
     parse_bits_intern(&mut stream, &mut ret)?;
-    Ok(ret.pop().unwrap())
+    ret.pop().ok_or(ParsingError::EmptyPacketStream)
 }
 
 fn parse_bits_intern(stream: &mut BitStream, acc: &mut Vec<Packet>) -> Result<usize, ParsingError> {
@@ -224,7 +262,9 @@ fn parse_bits_intern(stream: &mut BitStream, acc: &mut Vec<Packet>) -> Result<us
                 op,
                 Operand::GreaterThan | Operand::LessThan | Operand::Equals
             ) {
-                assert!(local_acc.len() == 2);
+                if local_acc.len() != 2 {
+                    return Err(ParsingError::InvalidInputLen)
+                }
             }
             acc.push(Packet::new_op_packet(version, op, local_acc));
         }
@@ -233,7 +273,7 @@ fn parse_bits_intern(stream: &mut BitStream, acc: &mut Vec<Packet>) -> Result<us
     Ok(read_all)
 }
 
-pub fn apply_ops(packet: &Rc<Packet>) -> u128 {
+pub fn apply_ops(packet: &Packet) -> u128 {
     match &packet.payload {
         Payload::Literal(x) => *x,
         Payload::Op(op, childs) => match op {
@@ -267,11 +307,11 @@ mod test {
     #[test]
     fn test_packet_stream() {
         let s = "D2FE28";
-        let bin: BitStream = s.into();
+        let bin: BitStream = s.try_into().unwrap();
         assert_eq!(vec![0xd2, 0xfe, 0x28], bin.backing.as_raw_slice());
 
         let s = "EE00D40C823060";
-        let bin: BitStream = s.into();
+        let bin: BitStream = s.try_into().unwrap();
         assert_eq!(
             vec![0xEE, 0x00, 0xD4, 0x0C, 0x82, 0x30, 0x60],
             bin.backing.as_raw_slice()
@@ -280,18 +320,18 @@ mod test {
         assert_eq!(212, convert(&bin[16..24]).unwrap());
 
         let s = "FF";
-        let bin: BitStream = s.into();
+        let bin: BitStream = s.try_into().unwrap();
         assert_eq!(255, convert(&bin[0..8]).unwrap());
         assert_eq!(15, convert(&bin[0..4]).unwrap());
 
         let s = "FFFF";
-        let mut bin: BitStream = s.into();
+        let mut bin: BitStream = s.try_into().unwrap();
         assert_eq!(15, bin.consume(4).unwrap());
         assert_eq!(15, bin.consume(4).unwrap());
         assert_eq!(255, bin.consume(8).unwrap());
 
         let s = "D2FE28";
-        let mut bin: BitStream = s.into();
+        let mut bin: BitStream = s.try_into().unwrap();
         assert_eq!(6, bin.consume(3).unwrap());
         assert_eq!(4, bin.consume(3).unwrap());
         assert_eq!(1, bin.consume(1).unwrap());
@@ -309,7 +349,7 @@ mod test {
     #[test]
     fn test_parse_packets() {
         let s = "D2FE28";
-        let bin: BitStream = s.into();
+        let bin: BitStream = s.try_into().unwrap();
         let packet = parse_bit_stream(bin).unwrap();
         assert_eq!(
             Packet {
@@ -320,7 +360,7 @@ mod test {
         );
 
         let s = "38006F45291200";
-        let bin: BitStream = s.into();
+        let bin: BitStream = s.try_into().unwrap();
         let packet = parse_bit_stream(bin).unwrap();
         assert_eq!(
             Packet {
@@ -328,14 +368,14 @@ mod test {
                 payload: Payload::Op(
                     Operand::LessThan,
                     vec![
-                        Rc::new(Packet {
+                        Packet {
                             version: 6,
                             payload: Payload::Literal(10)
-                        }),
-                        Rc::new(Packet {
+                        },
+                        Packet {
                             version: 2,
                             payload: Payload::Literal(20)
-                        })
+                        }
                     ]
                 )
             },
@@ -343,7 +383,7 @@ mod test {
         );
 
         let s = "EE00D40C823060";
-        let bin: BitStream = s.into();
+        let bin: BitStream = s.try_into().unwrap();
         let packet = parse_bit_stream(bin).unwrap();
         assert_eq!(
             Packet {
@@ -351,18 +391,18 @@ mod test {
                 payload: Payload::Op(
                     Operand::Maximum,
                     vec![
-                        Rc::new(Packet {
+                        Packet {
                             version: 2,
                             payload: Payload::Literal(1)
-                        }),
-                        Rc::new(Packet {
+                        },
+                        Packet {
                             version: 4,
                             payload: Payload::Literal(2)
-                        }),
-                        Rc::new(Packet {
+                        },
+                        Packet {
                             version: 1,
                             payload: Payload::Literal(3)
-                        })
+                        }
                     ]
                 )
             },
@@ -373,7 +413,7 @@ mod test {
     #[test]
     fn test_ops() {
         let s = "C200B40A82";
-        let bin: BitStream = s.into();
+        let bin: BitStream = s.try_into().unwrap();
         let packet = parse_bit_stream(bin).unwrap();
         assert_eq!(
             Packet {
@@ -381,62 +421,62 @@ mod test {
                 payload: Payload::Op(
                     Operand::Sum,
                     vec![
-                        Rc::new(Packet {
+                        Packet {
                             version: 6,
                             payload: Payload::Literal(1)
-                        }),
-                        Rc::new(Packet {
+                        },
+                        Packet {
                             version: 2,
                             payload: Payload::Literal(2)
-                        }),
+                        },
                     ]
                 )
             },
             packet
         );
-        let res = apply_ops(&Rc::new(packet));
+        let res = apply_ops(&packet);
         assert_eq!(3, res);
 
         let s = "04005AC33890";
-        let bin: BitStream = s.into();
+        let bin: BitStream = s.try_into().unwrap();
         let packet = parse_bit_stream(bin).unwrap();
-        let res = apply_ops(&Rc::new(packet));
+        let res = apply_ops(&packet);
         assert_eq!(54, res);
 
         let s = "880086C3E88112";
-        let bin: BitStream = s.into();
+        let bin: BitStream = s.try_into().unwrap();
         let packet = parse_bit_stream(bin).unwrap();
-        let res = apply_ops(&Rc::new(packet));
+        let res = apply_ops(&packet);
         assert_eq!(7, res);
 
         let s = "CE00C43D881120";
-        let bin: BitStream = s.into();
+        let bin: BitStream = s.try_into().unwrap();
         let packet = parse_bit_stream(bin).unwrap();
-        let res = apply_ops(&Rc::new(packet));
+        let res = apply_ops(&packet);
         assert_eq!(9, res);
 
         let s = "D8005AC2A8F0";
-        let bin: BitStream = s.into();
+        let bin: BitStream = s.try_into().unwrap();
         let packet = parse_bit_stream(bin).unwrap();
-        let res = apply_ops(&Rc::new(packet));
+        let res = apply_ops(&packet);
         assert_eq!(1, res);
 
         let s = "F600BC2D8F";
-        let bin: BitStream = s.into();
+        let bin: BitStream = s.try_into().unwrap();
         let packet = parse_bit_stream(bin).unwrap();
-        let res = apply_ops(&Rc::new(packet));
+        let res = apply_ops(&packet);
         assert_eq!(0, res);
 
         let s = "9C005AC2F8F0";
-        let bin: BitStream = s.into();
+        let bin: BitStream = s.try_into().unwrap();
         let packet = parse_bit_stream(bin).unwrap();
-        let res = apply_ops(&Rc::new(packet));
+        let res = apply_ops(&packet);
         assert_eq!(0, res);
 
         let s = "9C0141080250320F1802104A08";
-        let bin: BitStream = s.into();
+        let bin: BitStream = s.try_into().unwrap();
         let packet = parse_bit_stream(bin).unwrap();
-        let res = apply_ops(&Rc::new(packet));
+        let res = apply_ops(&packet);
         assert_eq!(1, res);
     }
 }
