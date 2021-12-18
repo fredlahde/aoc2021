@@ -13,6 +13,7 @@ fn main() {
     let bits = BitStream::from(contents.as_str());
     let packet = parse_bit_stream(bits).unwrap();
     let res = apply_ops(&Rc::new(packet));
+    assert_eq!(831996589851, res);
     println!("{}", res);
 }
 
@@ -33,30 +34,36 @@ pub struct BitStream {
     idx: usize,
 }
 
+#[derive(Debug)]
+pub enum ParsingError {
+    OOB,
+    Overflow,
+}
+
 impl From<&str> for BitStream {
     fn from(s: &str) -> Self {
         assert!(s.len() % 2 == 0);
-        let mut backing = Vec::new();
         let s_len = s.len();
         let mut chars = s.chars();
-        for _n in 0..(s_len / 2) {
-            let a: u8 = chars
-                .next()
-                .unwrap()
-                .to_digit(16)
-                .unwrap()
-                .try_into()
-                .unwrap();
-            let b: u8 = chars
-                .next()
-                .unwrap()
-                .to_digit(16)
-                .unwrap()
-                .try_into()
-                .unwrap();
-            let x = a << 4 | b;
-            backing.push(x);
-        }
+        let backing: Vec<u8> = (0..(s_len / 2))
+            .map(|_| {
+                let a: u8 = chars
+                    .next()
+                    .unwrap()
+                    .to_digit(16)
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
+                let b: u8 = chars
+                    .next()
+                    .unwrap()
+                    .to_digit(16)
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
+                a << 4 | b
+            })
+            .collect();
         assert!(backing.len() == s.len() / 2);
         Self {
             backing: backing.view_bits::<Msb0>().to_owned(),
@@ -77,9 +84,9 @@ impl BitStream {
     fn consume<T: From<bool> + BitXor<Output = T> + Shl<Output = T>>(
         &mut self,
         bits: usize,
-    ) -> Result<T, ConversionError> {
+    ) -> Result<T, ParsingError> {
         if self.idx + bits > self.backing.len() {
-            return Err(ConversionError::OOB);
+            return Err(ParsingError::OOB);
         }
         let ret = convert(&self[self.idx..self.idx + bits]);
         self.idx += bits;
@@ -87,18 +94,12 @@ impl BitStream {
     }
 }
 
-#[derive(Debug)]
-pub enum ConversionError {
-    OOB,
-    Overflow,
-}
-
-pub fn convert<T: From<bool> + BitXor<Output = T> + Shl<Output = T>>(
+fn convert<T: From<bool> + BitXor<Output = T> + Shl<Output = T>>(
     bits: &BitSlice<Msb0, u8>,
-) -> Result<T, ConversionError> {
+) -> Result<T, ParsingError> {
     let have_space = std::mem::size_of::<T>() * 8;
     if bits.len() > have_space {
-        return Err(ConversionError::Overflow);
+        return Err(ParsingError::Overflow);
     }
 
     let ret = bits.iter().fold(T::from(false), |result, bit| {
@@ -161,16 +162,13 @@ impl Packet {
     }
 }
 
-pub fn parse_bit_stream(mut stream: BitStream) -> Result<Packet, ConversionError> {
+pub fn parse_bit_stream(mut stream: BitStream) -> Result<Packet, ParsingError> {
     let mut ret = Vec::new();
     parse_bits_intern(&mut stream, &mut ret)?;
     Ok(ret.pop().unwrap())
 }
 
-fn parse_bits_intern(
-    stream: &mut BitStream,
-    acc: &mut Vec<Packet>,
-) -> Result<usize, ConversionError> {
+fn parse_bits_intern(stream: &mut BitStream, acc: &mut Vec<Packet>) -> Result<usize, ParsingError> {
     let mut read_all: usize = 0;
     let version: u8 = stream.consume(3)?;
     let typ: u8 = stream.consume(3)?;
@@ -185,14 +183,13 @@ fn parse_bits_intern(
 
             while cont == 1 {
                 cont = stream.consume(1)?;
-                acc_local.push(stream.consume::<u8>(4)?);
+                acc_local.push(stream.consume(4)?);
                 read_all += 5;
             }
 
-            let mut val: u128 = 0;
-            for xx in &acc_local {
-                val = (val << 4) | *xx as u128;
-            }
+            let val = acc_local
+                .into_iter()
+                .fold(0u128, |acc, x| (acc << 4) | x as u128);
             acc.push(Packet::new_literal_packet(version, val));
         }
         _ => {
@@ -240,14 +237,10 @@ pub fn apply_ops(packet: &Rc<Packet>) -> u128 {
     match &packet.payload {
         Payload::Literal(x) => *x,
         Payload::Op(op, childs) => match op {
-            Operand::Sum => childs.iter().fold(0u128, |acc, x| acc + apply_ops(x)),
-            Operand::Product => childs.iter().fold(1u128, |acc, x| acc * apply_ops(x)),
-            Operand::Minimum => childs
-                .iter()
-                .fold(u128::MAX, |acc, x| acc.min(apply_ops(x))),
-            Operand::Maximum => childs
-                .iter()
-                .fold(u128::MIN, |acc, x| acc.max(apply_ops(x))),
+            Operand::Sum => childs.iter().map(|p| apply_ops(p)).sum(),
+            Operand::Product => childs.iter().map(|p| apply_ops(p)).product(),
+            Operand::Minimum => childs.iter().map(|p| apply_ops(p)).min().unwrap_or(0),
+            Operand::Maximum => childs.iter().map(|p| apply_ops(p)).max().unwrap_or(0),
             Operand::LessThan => {
                 let a = apply_ops(&childs[0]);
                 let b = apply_ops(&childs[1]);
