@@ -78,11 +78,11 @@ impl TryFrom<&str> for BitStream {
                 let a = chars
                     .next()
                     .ok_or(ParsingError::EOF)
-                    .and_then(|c| byte_from_hex_char(c));
+                    .and_then(byte_from_hex_char);
                 let b = chars
                     .next()
                     .ok_or(ParsingError::EOF)
-                    .and_then(|c| byte_from_hex_char(c));
+                    .and_then(byte_from_hex_char);
                 if a.is_err() {
                     return a;
                 }
@@ -261,10 +261,9 @@ fn parse_bits_intern(stream: &mut BitStream, acc: &mut Vec<Packet>) -> Result<us
             if matches!(
                 op,
                 Operand::GreaterThan | Operand::LessThan | Operand::Equals
-            ) {
-                if local_acc.len() != 2 {
-                    return Err(ParsingError::InvalidInputLen)
-                }
+            ) && local_acc.len() != 2
+            {
+                return Err(ParsingError::InvalidInputLen);
             }
             acc.push(Packet::new_op_packet(version, op, local_acc));
         }
@@ -277,10 +276,10 @@ pub fn apply_ops(packet: &Packet) -> u128 {
     match &packet.payload {
         Payload::Literal(x) => *x,
         Payload::Op(op, childs) => match op {
-            Operand::Sum => childs.iter().map(|p| apply_ops(p)).sum(),
-            Operand::Product => childs.iter().map(|p| apply_ops(p)).product(),
-            Operand::Minimum => childs.iter().map(|p| apply_ops(p)).min().unwrap_or(0),
-            Operand::Maximum => childs.iter().map(|p| apply_ops(p)).max().unwrap_or(0),
+            Operand::Sum => childs.iter().map(apply_ops).sum(),
+            Operand::Product => childs.iter().map(apply_ops).product(),
+            Operand::Minimum => childs.iter().map(apply_ops).min().unwrap_or(0),
+            Operand::Maximum => childs.iter().map(apply_ops).max().unwrap_or(0),
             Operand::LessThan => {
                 let a = apply_ops(&childs[0]);
                 let b = apply_ops(&childs[1]);
