@@ -30,6 +30,14 @@ const EQ_PACKET_TYPE: u8 = 7;
 const LENGTH_TYP_LENGTH_IN_BYTES: u8 = 0;
 const LENGTH_TYP_NUM_SUB_PACKETS: u8 = 1;
 
+const BITS_VERSION: usize = 3;
+const BITS_TYP: usize = 3;
+const BITS_LEN_TYP: usize = 1;
+const BITS_CONT: usize = 1;
+const BITS_LITERAL_VAL: usize = 4;
+const BITS_SUB_PACKET_LENGTH: usize = 15;
+const BITS_SUB_PACKET_COUNT: usize = 11;
+
 pub struct BitStream {
     backing: BitVec<Msb0, u8>,
     idx: usize,
@@ -201,7 +209,7 @@ impl Packet {
 }
 
 macro_rules! cat {
-    ($acc: ident, $bin: ident, $n: literal) => {{
+    ($acc: ident, $bin: ident, $n: ident) => {{
         let x = $bin.consume($n)?;
         $acc += $n;
         x
@@ -216,18 +224,18 @@ pub fn parse_bit_stream(mut stream: BitStream) -> Result<Packet, ParsingError> {
 
 fn parse_bits_intern(stream: &mut BitStream, acc: &mut Vec<Packet>) -> Result<usize, ParsingError> {
     let mut read_all: usize = 0;
-    let version: u8 = cat!(read_all, stream, 3);
-    let typ: u8 = cat!(read_all, stream, 3);
+    let version: u8 = cat!(read_all, stream, BITS_VERSION);
+    let typ: u8 = cat!(read_all, stream, BITS_TYP);
 
     match typ {
         LITERAL_PACKET_TYP => {
-            let mut cont: u8 = cat!(read_all, stream, 1);
-            let val: u8 = cat!(read_all, stream, 4);
+            let mut cont: u8 = cat!(read_all, stream, BITS_CONT);
+            let val: u8 = cat!(read_all, stream, BITS_LITERAL_VAL);
             let mut acc_local = vec![val];
 
             while cont == 1 {
-                cont = cat!(read_all, stream, 1);
-                acc_local.push(cat!(read_all, stream, 4));
+                cont = cat!(read_all, stream, BITS_CONT);
+                acc_local.push(cat!(read_all, stream, BITS_LITERAL_VAL));
             }
 
             let val = acc_local
@@ -236,11 +244,11 @@ fn parse_bits_intern(stream: &mut BitStream, acc: &mut Vec<Packet>) -> Result<us
             acc.push(Packet::new_literal_packet(version, val));
         }
         _ => {
-            let len_typ: u8 = cat!(read_all, stream, 1);
+            let len_typ: u8 = cat!(read_all, stream, BITS_LEN_TYP);
             let mut local_acc = Vec::new();
             match len_typ {
                 LENGTH_TYP_LENGTH_IN_BYTES => {
-                    let sub_packet_len: u16 = cat!(read_all, stream, 15);
+                    let sub_packet_len: u16 = cat!(read_all, stream, BITS_SUB_PACKET_LENGTH);
 
                     let mut read: usize = 0;
                     while read < sub_packet_len.into() {
@@ -249,7 +257,7 @@ fn parse_bits_intern(stream: &mut BitStream, acc: &mut Vec<Packet>) -> Result<us
                     read_all += read;
                 }
                 LENGTH_TYP_NUM_SUB_PACKETS => {
-                    let num_packets: u16 = cat!(read_all, stream, 11);
+                    let num_packets: u16 = cat!(read_all, stream, BITS_SUB_PACKET_COUNT);
                     let mut packets_found = 0;
                     while packets_found < num_packets {
                         read_all += parse_bits_intern(stream, &mut local_acc)?;
