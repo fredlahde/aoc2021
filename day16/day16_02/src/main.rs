@@ -1,7 +1,10 @@
+//! A `BITS` packet parser
+#![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
+
 use bitvec::prelude::Msb0;
 use bitvec::prelude::*;
 use bitvec::slice::BitSlice;
-use std::convert::Infallible;
 use std::num::TryFromIntError;
 use std::ops::{BitXor, Index, Range, Shl};
 
@@ -18,47 +21,90 @@ fn main() {
     println!("{}", res);
 }
 
+/// The `type` field of a `literal` packet
 const LITERAL_PACKET_TYP: u8 = 4;
+
+/// The `type` field of a `sum` packet
 const SUM_PACKET_TYP: u8 = 0;
+
+/// The `type` field of a `product` packet
 const PRODUCT_PACKET_TYPE: u8 = 1;
+
+/// The `type` field of a `minimum` packet
 const MINIMUM_PACKET_TYPE: u8 = 2;
+
+/// The `type` field of a `maximum` packet
 const MAXIMUM_PACKET_TYPE: u8 = 3;
+
+/// The `type` field of a `greater than` packet
 const GREATER_THAN_PACKET_TYPE: u8 = 5;
+
+/// The `type` field of a `less than` packet
 const LESS_THAN_PACKET_TYPE: u8 = 6;
+
+/// The `type` field of a `equals` packet
 const EQ_PACKET_TYPE: u8 = 7;
 
-const LENGTH_TYP_LENGTH_IN_BYTES: u8 = 0;
+/// The `length type` bit for a packet describing it's sub packets in length of bits
+const LENGTH_TYP_LENGTH_IN_BITS: u8 = 0;
+
+/// The `length type` bit for a packet describing it's sub packets in number of packets
 const LENGTH_TYP_NUM_SUB_PACKETS: u8 = 1;
 
+/// The length in bits for the `version` field
 const BITS_VERSION: usize = 3;
+
+/// The length in bits for the `typ` field
 const BITS_TYP: usize = 3;
+
+/// The length in bits for the `len typ` field
 const BITS_LEN_TYP: usize = 1;
+
+/// The length in bits for the `continue bit` field
 const BITS_CONT: usize = 1;
+
+/// The length in bits for the `literal value` field
 const BITS_LITERAL_VAL: usize = 4;
+
+/// The length in bits for the `sub packet length` field
 const BITS_SUB_PACKET_LENGTH: usize = 15;
+
+/// The length in bits for the `sub packet count` field
 const BITS_SUB_PACKET_COUNT: usize = 11;
 
+/// A stream of bits, backed by a vector of bytes
 pub struct BitStream {
+    /// The backing vector of bytes
     backing: BitVec<Msb0, u8>,
+
+    /// The current index into `backing`
+    /// Get's increased by calling `consume`
     idx: usize,
 }
 
+/// Errors that can occur while parsing the packets
 #[derive(Debug, Clone)]
 pub enum ParsingError {
+    /// Failing to read more bits then avaiable
     OOB,
-    Overflow,
-    InvalidHexDigit(char),
-    FromIntError(TryFromIntError),
-    ByteOverflow(Infallible),
-    EOF,
-    EmptyPacketStream,
-    InvalidInputLen,
-}
 
-impl From<Infallible> for ParsingError {
-    fn from(e: Infallible) -> Self {
-        Self::ByteOverflow(e)
-    }
+    /// Failing to parse bits into a too-small integer type
+    Overflow,
+
+    /// Failing to convert a char that is not hex into a integer
+    InvalidHexDigit(char),
+
+    /// Failing to safely cast a integer type
+    FromIntError(TryFromIntError),
+
+    /// The input hex string ended earlier than expected
+    EOF,
+
+    /// The packet stream is empty
+    EmptyPacketStream,
+
+    /// The input has not a valid length
+    InvalidInputLen,
 }
 
 impl From<TryFromIntError> for ParsingError {
@@ -67,6 +113,7 @@ impl From<TryFromIntError> for ParsingError {
     }
 }
 
+/// Try to convert a hex char into a byte
 fn byte_from_hex_char(c: char) -> Result<u8, ParsingError> {
     Ok(c.to_digit(16)
         .ok_or(ParsingError::InvalidHexDigit(c))?
@@ -127,6 +174,7 @@ impl Index<Range<usize>> for BitStream {
 }
 
 impl BitStream {
+    /// Consume `bits` number of bits from this stream and try to convert it into an integer
     fn consume<T: From<bool> + BitXor<Output = T> + Shl<Output = T>>(
         &mut self,
         bits: usize,
@@ -140,6 +188,7 @@ impl BitStream {
     }
 }
 
+/// Try to convert a set of bits into a integer
 fn convert<T: From<bool> + BitXor<Output = T> + Shl<Output = T>>(
     bits: &BitSlice<Msb0, u8>,
 ) -> Result<T, ParsingError> {
@@ -154,26 +203,53 @@ fn convert<T: From<bool> + BitXor<Output = T> + Shl<Output = T>>(
     Ok(ret)
 }
 
+/// A packet in the `BITS` system
 #[derive(Debug, PartialEq)]
 pub struct Packet {
+    /// The version header of this packet
     version: u8,
+
+    /// The pay load of this packet.
+    /// Either a literal value of an op on a list of sub packets
     payload: Payload,
 }
 
+/// The payload of a `BITS` packet.
+/// Can either be a literal value or an operation on a set of packets
 #[derive(Debug, PartialEq)]
 pub enum Payload {
+    /// Payload that simpy hols a literal value
     Literal(u128),
+
+    /// A operation describing how to alter the child packets
     Op(Operand, Vec<Packet>),
 }
 
+/// A operation that has to be applied on a set of packets
 #[derive(Debug, PartialEq)]
 pub enum Operand {
+    /// Calculate the sum of the set of packets
     Sum,
+
+    /// Calculate the product of the set of packets
     Product,
+
+    /// Calculate the minimum of the set of packets
     Minimum,
+
+    /// Calculate the maximum of the set of packets
     Maximum,
+
+    /// Calculate whether the first packet is greater than the second packet
+    /// This operation always operates on exactly two packets
     GreaterThan,
+
+    /// Calculate whether the first packet is less than the second packet
+    /// This operation always operates on exactly two packets
     LessThan,
+
+    /// Calculate whether the first packet is equal to the second packet
+    /// This operation always operates on exactly two packets
     Equals,
 }
 
@@ -193,6 +269,7 @@ impl From<u8> for Operand {
 }
 
 impl Packet {
+    /// Construct a new `literal` packet
     fn new_literal_packet(version: u8, val: u128) -> Self {
         Self {
             version,
@@ -200,6 +277,7 @@ impl Packet {
         }
     }
 
+    /// Construct a new `operation` packet with child packets
     fn new_op_packet(version: u8, op: Operand, childs: Vec<Packet>) -> Self {
         Self {
             version,
@@ -208,6 +286,7 @@ impl Packet {
     }
 }
 
+/// Consumes `n` bits from the stream `bin` and increases `acc` by `n`
 macro_rules! cat {
     ($acc: ident, $bin: ident, $n: ident) => {{
         let x = $bin.consume($n)?;
@@ -216,12 +295,14 @@ macro_rules! cat {
     }};
 }
 
+/// Parse a stream of bits into a `BITS` packet tree
 pub fn parse_bit_stream(mut stream: BitStream) -> Result<Packet, ParsingError> {
     let mut ret = Vec::new();
     parse_bits_intern(&mut stream, &mut ret)?;
     ret.pop().ok_or(ParsingError::EmptyPacketStream)
 }
 
+/// Recursivley parse a stream of bits into a `BITS` packet tree
 fn parse_bits_intern(stream: &mut BitStream, acc: &mut Vec<Packet>) -> Result<usize, ParsingError> {
     let mut read_all: usize = 0;
     let version: u8 = cat!(read_all, stream, BITS_VERSION);
@@ -247,7 +328,7 @@ fn parse_bits_intern(stream: &mut BitStream, acc: &mut Vec<Packet>) -> Result<us
             let len_typ: u8 = cat!(read_all, stream, BITS_LEN_TYP);
             let mut local_acc = Vec::new();
             match len_typ {
-                LENGTH_TYP_LENGTH_IN_BYTES => {
+                LENGTH_TYP_LENGTH_IN_BITS => {
                     let sub_packet_len: u16 = cat!(read_all, stream, BITS_SUB_PACKET_LENGTH);
 
                     let mut read: usize = 0;
@@ -282,6 +363,7 @@ fn parse_bits_intern(stream: &mut BitStream, acc: &mut Vec<Packet>) -> Result<us
     Ok(read_all)
 }
 
+/// Apply the operations of this packet and it's sub-packets recursively
 pub fn apply_ops(packet: &Packet) -> u128 {
     match &packet.payload {
         Payload::Literal(x) => *x,
