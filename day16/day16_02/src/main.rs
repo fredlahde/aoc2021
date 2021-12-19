@@ -113,11 +113,17 @@ impl From<TryFromIntError> for ParsingError {
     }
 }
 
-/// Try to convert a hex char into a byte
-fn byte_from_hex_char(c: char) -> Result<u8, ParsingError> {
-    Ok(c.to_digit(16)
-        .ok_or(ParsingError::InvalidHexDigit(c))?
-        .try_into()?)
+/// Tries to convert two hex chars into a byte
+fn byte_from_hex_chars(chars: (char, char)) -> Result<u8, ParsingError> {
+    let mut val: u8 = 0;
+    for c in [chars.0, chars.1] {
+        let byte: u8 = c
+            .to_digit(16)
+            .ok_or(ParsingError::InvalidHexDigit(c))?
+            .try_into()?;
+        val = (val << 4) | byte;
+    }
+    Ok(val)
 }
 
 impl TryFrom<&str> for BitStream {
@@ -126,42 +132,15 @@ impl TryFrom<&str> for BitStream {
         if s.len() % 2 != 0 {
             return Err(ParsingError::InvalidInputLen);
         }
-        let s_len = s.len();
-        let mut chars = s.chars();
-        let backing: Vec<Result<u8, ParsingError>> = (0..(s_len / 2))
-            .map(|_| {
-                let a = chars
-                    .next()
-                    .ok_or(ParsingError::EOF)
-                    .and_then(byte_from_hex_char);
-                let b = chars
-                    .next()
-                    .ok_or(ParsingError::EOF)
-                    .and_then(byte_from_hex_char);
-                if a.is_err() {
-                    return a;
-                }
-                if b.is_err() {
-                    return b;
-                }
-                Ok(a.unwrap() << 4 | b.unwrap())
+        s.chars()
+            .step_by(2)
+            .zip(s.chars().skip(1).step_by(2))
+            .map(byte_from_hex_chars)
+            .collect::<Result<Vec<_>, _>>()
+            .map(|backing| Self {
+                backing: backing.view_bits::<Msb0>().to_owned(),
+                idx: 0,
             })
-            .collect();
-        if backing.len() != s.len() / 2 {
-            return Err(ParsingError::InvalidInputLen);
-        }
-
-        let maybe_err = backing.iter().find(|r| r.is_err());
-        if let Some(Err(e)) = maybe_err {
-            return Err(e.clone());
-        }
-
-        let backing: Vec<u8> = backing.into_iter().map(|r| r.unwrap()).collect();
-
-        Ok(Self {
-            backing: backing.view_bits::<Msb0>().to_owned(),
-            idx: 0,
-        })
     }
 }
 
