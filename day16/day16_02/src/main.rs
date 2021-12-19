@@ -105,6 +105,12 @@ pub enum ParsingError {
 
     /// The input has not a valid length
     InvalidInputLen,
+
+    /// Parsing encountered an invalid operand
+    InvalidOperand(u8),
+
+    /// Parsing encountered an invalid length typ
+    InvalidLengthTyp(u8),
 }
 
 impl From<TryFromIntError> for ParsingError {
@@ -232,9 +238,11 @@ pub enum Operand {
     Equals,
 }
 
-impl From<u8> for Operand {
-    fn from(x: u8) -> Self {
-        match x {
+impl TryFrom<u8> for Operand {
+    type Error = ParsingError;
+
+    fn try_from(x: u8) -> Result<Self, Self::Error> {
+        Ok(match x {
             SUM_PACKET_TYP => Operand::Sum,
             PRODUCT_PACKET_TYPE => Operand::Product,
             MINIMUM_PACKET_TYPE => Operand::Minimum,
@@ -242,8 +250,8 @@ impl From<u8> for Operand {
             GREATER_THAN_PACKET_TYPE => Operand::GreaterThan,
             LESS_THAN_PACKET_TYPE => Operand::LessThan,
             EQ_PACKET_TYPE => Operand::Equals,
-            _ => todo!(),
-        }
+            _ => return Err(ParsingError::InvalidOperand(x)),
+        })
     }
 }
 
@@ -324,10 +332,10 @@ fn parse_bits_intern(stream: &mut BitStream, acc: &mut Vec<Packet>) -> Result<us
                         packets_found += 1;
                     }
                 }
-                _ => todo!(),
+                _ => return Err(ParsingError::InvalidLengthTyp(len_typ)),
             };
 
-            let op = Operand::from(typ);
+            let op = Operand::try_from(typ)?;
             if matches!(
                 op,
                 Operand::GreaterThan | Operand::LessThan | Operand::Equals
